@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
+trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # Parse command line arguments
 args=$(getopt --options 'hd' \
@@ -39,7 +40,7 @@ while true; do
     esac
 done
 
-export NEEDRESTART_MODE=a  
+export NEEDRESTART_MODE=a
 export DEBIAN_FRONTEND=noninteractive
 
 if [ -z "$ub_dir" ]; then
@@ -49,36 +50,269 @@ else
   echo "Directory is set to $ub_dir"
 fi
 
-# fast fetch
-sudo add-apt-repository ppa:zhangsongcui3371/fastfetch -y
-sudo apt update
+# ========== UTILITY FUNCTIONS ==========
 
-# standalone kernel mode reqs
-sudo apt install -y bc bison build-essential \
-ca-certificates cpio curl flex git kmod libssl-dev \
-unzip wget xz-utils android-sdk-libsparse-utils jq fastfetch
+is_in_distrobox() {
+    [[ -f /run/.containerenv ]] || [[ -f /.dockerenv ]] || [[ -n "${container:-}" ]]
+}
 
-# compile py2
-sudo apt install -y build-essential checkinstall libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev libffi-dev
-mkdir -p "$ub_dir/distrobox-setup/py2"
-wget https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz -O "$ub_dir/distrobox-setup/py2/py2-2.7.18.tgz"
-cd "$ub_dir/distrobox-setup/py2/"
-tar xzf py2-2.7.18.tgz
-cd Python-2.7.18
-./configure --enable-optimizations
-make  -j$(nproc) build_all  
-sudo make altinstall
-sudo ln -sf /usr/local/bin/python2.7 /usr/local/bin/python2
-curl https://bootstrap.pypa.io/pip/2.7/get-pip.py -o "$ub_dir/distrobox-setup/py2/get-pip.py"
-sudo python2 "$ub_dir/distrobox-setup/py2/get-pip.py"
+get_host_shell() {
+    if is_in_distrobox && command -v distrobox-host-exec &> /dev/null; then
+        distrobox-host-exec bash -c 'echo $SHELL' 2>/dev/null || echo "/bin/bash"
+    else
+        echo "$SHELL"
+    fi
+}
 
-# libtinfo5 
-wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb -O "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
-sudo apt install -y "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
-sudo apt-get install -f -y 
+get_rc_file() {
+    local host_shell shell_name
+    host_shell=$(get_host_shell)
+    shell_name=$(basename "$host_shell")
+
+    case "$shell_name" in
+        bash)
+            echo "$HOME/.bashrc"
+            ;;
+        zsh)
+            echo "$HOME/.zshrc"
+            ;;
+        fish)
+            echo "$HOME/.config/fish/config.fish"
+            ;;
+        *)
+            echo "$HOME/.profile"
+            ;;
+    esac
+}
+
+# ========== CHECK FUNCTIONS ==========
+
+check_fastfetch() {
+    command -v fastfetch &> /dev/null
+}
+
+check_py2() {
+    command -v python2 &> /dev/null
+}
+
+check_libtinfo5() {
+    dpkg -s libtinfo5 &> /dev/null
+}
+
+check_btop() {
+    [ -f "$ub_dir/distrobox-bin/btop" ]
+}
+
+check_neovim() {
+    [ -f "$ub_dir/distrobox-bin/nvim" ]
+}
+
+check_rc_file() {
+    local rc_file
+    rc_file=$(get_rc_file)
+    grep -q "we are running in a container" "$rc_file" 2>/dev/null
+}
+
+# ========== INSTALL FUNCTIONS ==========
+
+install_fastfetch() {
+    echo "Installing fastfetch..."
+    sudo add-apt-repository ppa:zhangsongcui3371/fastfetch -y
+    sudo apt update
+    sudo apt install -y fastfetch
+}
+
+install_standalone_reqs() {
+    echo "Checking and installing missing standalone kernel mode requirements..."
+    sudo apt install -y bc bison build-essential \
+    ca-certificates cpio curl flex git kmod libssl-dev \
+    unzip wget xz-utils android-sdk-libsparse-utils jq
+}
+
+install_py2() {
+    echo "Installing Python 2..."
+    sudo apt install -y build-essential checkinstall libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev libffi-dev
+
+    mkdir -p "$ub_dir/distrobox-setup/py2"
+
+    if [ ! -f "$ub_dir/distrobox-setup/py2/py2-2.7.18.tgz" ]; then
+        wget https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz -O "$ub_dir/distrobox-setup/py2/py2-2.7.18.tgz"
+    fi
+
+    cd "$ub_dir/distrobox-setup/py2/"
+    tar xzf py2-2.7.18.tgz
+    cd Python-2.7.18
+    ./configure --enable-optimizations
+    make -j$(nproc) build_all
+    sudo make altinstall
+    sudo ln -sf /usr/local/bin/python2.7 /usr/local/bin/python2
+
+    if [ ! -f "$ub_dir/distrobox-setup/py2/get-pip.py" ]; then
+        curl https://bootstrap.pypa.io/pip/2.7/get-pip.py -o "$ub_dir/distrobox-setup/py2/get-pip.py"
+    fi
+    sudo python2 "$ub_dir/distrobox-setup/py2/get-pip.py"
+}
+
+install_libtinfo5() {
+    echo "Installing libtinfo5..."
+    mkdir -p "$ub_dir/distrobox-setup"
+    if [ ! -f "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb" ]; then
+        wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb -O "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
+    fi
+    sudo apt install -y "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
+    sudo apt-get install -f -y
+}
+
+install_btop() {
+    echo "Installing latest btop..."
+    mkdir -p "$ub_dir/distrobox-bin"
+
+    # Get latest version using GitHub API
+    BTOP_VERSION=$(curl -s https://api.github.com/repos/aristocratos/btop/releases/latest | jq -r '.tag_name')
+
+    if [ "$BTOP_VERSION" = "null" ] || [ -z "$BTOP_VERSION" ]; then
+        echo "✗ Failed to get btop version. Skipping installation."
+        return 1
+    fi
+
+    echo "Installing btop version: $BTOP_VERSION"
+
+    # Download and install
+    BTOP_URL="https://github.com/aristocratos/btop/releases/download/$BTOP_VERSION/btop-x86_64-linux-musl.tbz"
+    wget "$BTOP_URL" -O - | tar --extract --bzip2 --directory="$ub_dir/distrobox-bin" --strip=1 bin/btop
+    chmod +x "$ub_dir/distrobox-bin/btop"
+}
+
+install_neovim() {
+    echo "Installing latest neovim..."
+    mkdir -p "$ub_dir/distrobox-bin"
+
+    # Get latest version from GH
+    NVIM_VERSION=$(curl -s https://api.github.com/repos/neovim/neovim/releases/latest | jq -r '.tag_name')
+
+    if [ "$NVIM_VERSION" = "null" ] || [ -z "$NVIM_VERSION" ]; then
+        echo "✗ Failed to get neovim version. Skipping installation."
+        return 1
+    fi
+
+    echo "Installing neovim version: $NVIM_VERSION"
+
+    # Download and install
+    NVIM_URL="https://github.com/neovim/neovim/releases/download/$NVIM_VERSION/nvim-linux64.tar.gz"
+    wget "$NVIM_URL" -O - | tar --extract --gzip --directory="$ub_dir/distrobox-bin" --strip=2 nvim-linux64/bin/nvim
+    chmod +x "$ub_dir/distrobox-bin/nvim"
+}
+
+update_rc_file() {
+    echo "Updating RC file..."
+
+    local rc_file host_shell shell_name
+    rc_file=$(get_rc_file)
+    host_shell=$(get_host_shell)
+    shell_name=$(basename "$host_shell")
+
+    echo "Detected host shell: $host_shell"
+    echo "Shell name: $shell_name"
+    echo "Using RC file: $rc_file"
+
+    # Tell fish to go away
+    if [[ "$shell_name" == "fish" ]]; then
+        echo "Fish shell detected but not supported for this configuration. Skipping rc file update."
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$rc_file")"
+    if [[ ! -f "$rc_file" ]]; then
+        touch "$rc_file"
+    fi
+
+    cat >> "$rc_file" << 'EOF'
+
+# Ubuntu Touch development environment configuration
+if [[ -f /.dockerenv ]] &&          # we are running in a container
+   [[ -r /etc/os-release ]] &&
+   grep -q '^ID=ubuntu' /etc/os-release; then   #container is Ubuntu
+        # append
+        path+=("/mnt/buoy/arnav/clones/ubports-exynos9810/distrobox-bin/")
+        ub_dir="/mnt/buoy/arnav/clones/ubports-exynos9810/"
+        alias python2='python2.7'
+fi
+alias ubt="distrobox enter ubtouch-porting"
+EOF
+}
+
+# ========== COMPONENT MANAGEMENT FUNCTIONS ==========
+
+manage_component() {
+    local component_name="$1"
+    local check_function="$2"
+    local install_function="$3"
+
+    if $check_function; then
+        echo "$component_name is already installed. Skipping installation."
+    else
+        $install_function
+    fi
+}
+
+# ========== MAIN INSTALLATION SEQUENCE ==========
+
+echo "Starting Ubuntu Touch Development Environment Setup..."
+
+# Detect environment and shell information
+if is_in_distrobox; then
+    echo "Running inside distrobox container"
+    echo "Host shell: $(get_host_shell)"
+    echo "Target RC file: $(get_rc_file)"
+else
+    echo "Running on host system"
+    echo "Shell: $SHELL"
+fi
+
+# Create necessary directories
+mkdir -p "$ub_dir/distrobox-setup"
+
+# Install standalone requirements (no check function as these are system packages)
+install_standalone_reqs
+
+# Install components with checks
+manage_component "fastfetch" check_fastfetch install_fastfetch
+manage_component "Python 2" check_py2 install_py2
+manage_component "libtinfo5" check_libtinfo5 install_libtinfo5
+manage_component "btop" check_btop install_btop
+manage_component "neovim" check_neovim install_neovim
+
+# Update RC file
+if check_rc_file; then
+    echo "RC file configuration already present. Skipping update."
+else
+    update_rc_file
+fi
 
 echo "Setup completed successfully!"
 echo "Verifying installations..."
-python2 --version
-fastfetch --version 2>/dev/null || echo "fastfetch installed"
 
+# Verification section
+if check_py2; then
+    echo "✔ Python2 installed from source"
+else
+    echo "✗ Python2 installation verification failed"
+fi
+
+if check_fastfetch; then
+    echo "✔ Fastfetch installed via apt"
+else
+    echo "✗ Fastfetch installation verification failed"
+fi
+
+if check_btop; then
+    echo "✔ Btop installed to $ub_dir/distrobox-bin/btop"
+else
+    echo "✗ Btop installation verification failed"
+fi
+
+if check_neovim; then
+    echo "✔ Neovim installed to $ub_dir/distrobox-bin/nvim"
+else
+    echo "X Neovim installation verification failed"
+fi
