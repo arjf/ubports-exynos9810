@@ -124,7 +124,7 @@ install_fastfetch() {
 
 install_standalone_reqs() {
     echo "Checking and installing missing standalone kernel mode requirements..."
-    sudo apt install -y bc bison build-essential \
+    sudo apt install -y -qq bc bison build-essential \
     ca-certificates cpio curl flex git kmod libssl-dev \
     unzip wget xz-utils android-sdk-libsparse-utils jq
 }
@@ -179,7 +179,7 @@ install_btop() {
 
     # Download and install
     BTOP_URL="https://github.com/aristocratos/btop/releases/download/$BTOP_VERSION/btop-x86_64-linux-musl.tbz"
-    wget "$BTOP_URL" -O - | tar --extract --bzip2 --directory="$ub_dir/distrobox-bin" --strip=1 bin/btop
+    wget "$BTOP_URL" -O - | tar --extract --bzip2 --directory="$ub_dir/distrobox-bin" --strip-components=3 ./btop/bin/btop
     chmod +x "$ub_dir/distrobox-bin/btop"
 }
 
@@ -198,8 +198,8 @@ install_neovim() {
     echo "Installing neovim version: $NVIM_VERSION"
 
     # Download and install
-    NVIM_URL="https://github.com/neovim/neovim/releases/download/$NVIM_VERSION/nvim-linux64.tar.gz"
-    wget "$NVIM_URL" -O - | tar --extract --gzip --directory="$ub_dir/distrobox-bin" --strip=2 nvim-linux64/bin/nvim
+    NVIM_URL="https://github.com/neovim/neovim/releases/download/$NVIM_VERSION/nvim-linux-x86_64.tar.gz"
+    wget "$NVIM_URL" -O - | tar --extract --gzip --directory="$ub_dir/distrobox-bin"  --strip-components=2 nvim-linux-x86_64/bin/nvim
     chmod +x "$ub_dir/distrobox-bin/nvim"
 }
 

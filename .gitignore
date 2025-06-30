@@ -1,3 +1,4 @@
 .python2
 distrobox-bin/
 distrobox-setup/
+build

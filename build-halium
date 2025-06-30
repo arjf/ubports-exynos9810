@@ -1,4 +1,8 @@
-#!/bin/bash 
+#!/bin/bash
+
+set -Eeuo pipefail
+trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
+
 
 if [ -z "$ub_dir" ]; then
   ub_dir="$HOME/ubports"
