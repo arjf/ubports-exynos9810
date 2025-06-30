@@ -233,8 +233,8 @@ if [[ -f /.dockerenv ]] &&          # we are running in a container
    [[ -r /etc/os-release ]] &&
    grep -q '^ID=ubuntu' /etc/os-release; then   #container is Ubuntu
         # append
-        path+=("/mnt/buoy/arnav/clones/ubports-exynos9810/distrobox-bin/")
-        ub_dir="/mnt/buoy/arnav/clones/ubports-exynos9810/"
+        export PATH="/mnt/buoy/arnav/clones/ubports-exynos9810/distrobox-bin/:$PATH"
+        export ub_dir="/mnt/buoy/arnav/clones/ubports-exynos9810/"
         alias python2='python2.7'
 fi
 alias ubt="distrobox enter ubtouch-porting"
