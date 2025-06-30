@@ -1,6 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
-trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo "✗ exited on line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # Parse command line arguments
 args=$(getopt --options 'hd' \
@@ -43,7 +43,7 @@ done
 export NEEDRESTART_MODE=a
 export DEBIAN_FRONTEND=noninteractive
 
-if [ -z "$ub_dir" ]; then
+if [ -z "${ub_dir:-}" ]; then
   ub_dir="$HOME/ubports"
   echo "Directory not set, defaulting to $ub_dir"
 else
@@ -170,7 +170,7 @@ install_btop() {
     # Get latest version using GitHub API
     BTOP_VERSION=$(curl -s https://api.github.com/repos/aristocratos/btop/releases/latest | jq -r '.tag_name')
 
-    if [ "$BTOP_VERSION" = "null" ] || [ -z "$BTOP_VERSION" ]; then
+    if [ "$BTOP_VERSION" = "null" ] || [ -z "${BTOP_VERSION:-}" ]; then
         echo "✗ Failed to get btop version. Skipping installation."
         return 1
     fi
@@ -190,7 +190,7 @@ install_neovim() {
     # Get latest version from GH
     NVIM_VERSION=$(curl -s https://api.github.com/repos/neovim/neovim/releases/latest | jq -r '.tag_name')
 
-    if [ "$NVIM_VERSION" = "null" ] || [ -z "$NVIM_VERSION" ]; then
+    if [ "$NVIM_VERSION" = "null" ] || [ -z "${NVIM_VERSION:-}" ]; then
         echo "✗ Failed to get neovim version. Skipping installation."
         return 1
     fi
