@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# Variables
+BOXNAME=ubtouch-porting
+WORKDIR="/mnt/buoy/arnav/clones/ubports-exynos9810/build"
+IMAGE=ubuntu:latest #ubuntu:20.04
+
+# Dependencies
+deps=(
+  systemd libpam-systemd git gnupg flex bison gperf build-essential zip
+  bzr curl libc6-dev libc6-dev:i386 libncurses-dev:i386 libtinfo6:i386
+  x11proto-dev libx11-dev:i386 libreadline-dev:i386 libgl1:i386
+  libglx-mesa0:i386 libgl1-mesa-dev g++-multilib mingw-w64-i686-dev
+  tofrodos python3-markdown libxml2-utils xsltproc zlib1g-dev zlib1g-dev:i386
+  schedtool liblz4-tool bc lzop imagemagick libncurses6 rsync
+  python-is-python3 ccache openjdk-8-jdk squashfs-tools
+)
+
+old_deps=(
+  systemd libpam-systemd git gnupg flex bison gperf build-essential zip
+  bzr curl libc6-dev libncurses5-dev:i386 x11proto-core-dev libx11-dev:i386
+  libreadline6-dev:i386 libgl1-mesa-glx:i386 libgl1-mesa-dev g++-multilib
+  mingw-w64-i686-dev tofrodos python3-markdown libxml2-utils xsltproc
+  zlib1g-dev zlib1g-dev:i386 schedtool liblz4-tool bc lzop imagemagick
+  libncurses5 rsync python-is-python3 python2 ccache openjdk-8-jdk
+  squashfs-tools
+)
+
+# Parse command line arguments
+args=$(getopt --options 'hd' \
+              --longoptions 'help,debug' \
+              -- "$@") || exit
+
+eval "set -- $args"
+
+debug=false
+
+while true; do
+    case "$1" in
+        (-h | --help)
+            echo "Ubuntu Touch Porting Environment Setup"
+            echo "Usage: $0 [options]"
+            echo "  -h, --help:  Show this help message"
+            echo "  -d, --debug: Enable debug mode (verbose output)"
+            echo ""
+            echo "This script creates a distrobox container named '$BOXNAME' for Ubuntu Touch porting."
+            echo "Container will have access to USB devices and include all necessary build dependencies."
+            echo ""
+            echo "Variables you can customize:"
+            echo "  BOXNAME: Container name (default: ubtouch-porting)"
+            echo "  WORKDIR: Build directory (default: /mnt/buoy/arnav/clones/ubports-exynos9810/build)"
+            echo "  IMAGE: Base image (default: ubuntu:latest)"
+            exit 0
+            ;;
+        (-d | --debug)
+            debug=true
+            echo "Debug mode enabled - showing all commands"
+            set -x
+            shift
+            ;;
+        (--)
+            shift
+            break
+            ;;
+        (*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+
+# Find usb groups if they exist.
+extra_flags="--device=/dev/bus/usb"
+
+for grp in adbusers plugdev; do
+  if getent group "$grp" >/dev/null; then
+    gid=$(getent group "$grp" | cut -d: -f3)
+    extra_flags+=" --group-add=$gid"
+    break
+  fi
+done
+
+
+# Forward SSH Agent and add user 
+SSH_SOCK=${SSH_AUTH_SOCK:-}
+[[ -n $SSH_SOCK ]] && extra_flags+=" -v ${SSH_SOCK}:${SSH_SOCK}:ro"
+#extra_flags+=" --user $(id -u):$(id -g)"
+
+
+# Handle installation of 'repo'
+post_repo="mkdir -p /home/$USER/bin && \
+           curl -s https://storage.googleapis.com/git-repo-downloads/repo -o /home/$USER/bin/repo && \
+           chmod a+x /home/$USER/bin/repo "
+
+
+# WORKDIR validation
+mkdir -p "$WORKDIR"
+chmod u+rwx "$WORKDIR"
+
+
+# Create the container
+distrobox create -Y -p \
+  --name  "$BOXNAME" \
+  --image "$IMAGE" \
+  --init \
+  --volume "$WORKDIR":/app/build \
+  --additional-flags "$extra_flags" \
+  --pre-init-hooks 'dpkg --add-architecture i386 && apt-get update -y' \
+  --init-hooks "$post_repo" \
+  --additional-packages "${deps[*]}" 
+  #--post-init-hooks "useradd -u $(id -u) -o -m $USER && usermod -aG sudo $USER" 
+
+
+# Quirky fancy output message
+echo
+echo "✔  Container \"$BOXNAME\" ready.  Enter it with:"
+echo "   distrobox enter $BOXNAME"

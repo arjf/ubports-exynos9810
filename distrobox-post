@@ -1,0 +1,84 @@
+#!/bin/bash
+set -e
+
+# Parse command line arguments
+args=$(getopt --options 'hd' \
+              --longoptions 'help,debug' \
+              -- "$@") || exit
+
+eval "set -- $args"
+
+debug=false
+
+while true; do
+    case "$1" in
+        (-h | --help)
+            echo "Ubuntu Touch Development Environment Setup"
+            echo "Usage: $0 [options]"
+            echo "  -h, --help:  Show this help message"
+            echo "  -d, --debug: Enable debug mode (verbose output)"
+            echo ""
+            echo "Environment variables:"
+            echo "  ub_dir: Set custom directory (default: \$HOME/ubports)"
+            exit 0
+            ;;
+        (-d | --debug)
+            debug=true
+            echo "Debug mode enabled - showing all commands"
+            set -x
+            shift
+            ;;
+        (--)
+            shift
+            break
+            ;;
+        (*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+export NEEDRESTART_MODE=a  
+export DEBIAN_FRONTEND=noninteractive
+
+if [ -z "$ub_dir" ]; then
+  ub_dir="$HOME/ubports"
+  echo "Directory not set, defaulting to $ub_dir"
+else
+  echo "Directory is set to $ub_dir"
+fi
+
+# fast fetch
+sudo add-apt-repository ppa:zhangsongcui3371/fastfetch -y
+sudo apt update
+
+# standalone kernel mode reqs
+sudo apt install -y bc bison build-essential \
+ca-certificates cpio curl flex git kmod libssl-dev \
+unzip wget xz-utils android-sdk-libsparse-utils jq fastfetch
+
+# compile py2
+sudo apt install -y build-essential checkinstall libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev libffi-dev
+mkdir -p "$ub_dir/distrobox-setup/py2"
+wget https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz -O "$ub_dir/distrobox-setup/py2/py2-2.7.18.tgz"
+cd "$ub_dir/distrobox-setup/py2/"
+tar xzf py2-2.7.18.tgz
+cd Python-2.7.18
+./configure --enable-optimizations
+make  -j$(nproc) build_all  
+sudo make altinstall
+sudo ln -sf /usr/local/bin/python2.7 /usr/local/bin/python2
+curl https://bootstrap.pypa.io/pip/2.7/get-pip.py -o "$ub_dir/distrobox-setup/py2/get-pip.py"
+sudo python2 "$ub_dir/distrobox-setup/py2/get-pip.py"
+
+# libtinfo5 
+wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb -O "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
+sudo apt install -y "$ub_dir/distrobox-setup/libtinfo5_6.3-2ubuntu0.1_amd64.deb"
+sudo apt-get install -f -y 
+
+echo "Setup completed successfully!"
+echo "Verifying installations..."
+python2 --version
+fastfetch --version 2>/dev/null || echo "fastfetch installed"
+
