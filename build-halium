@@ -1,0 +1,17 @@
+#!/bin/bash 
+
+if [ -z "$ub_dir" ]; then
+  ub_dir="$HOME/ubports"
+  echo "Directory not set, defaulting to $ub_dir"
+else
+  echo "Directory is set to $ub_dir"
+fi
+
+
+mkdir -p $ub_dir/build
+cd $ub_dir/build
+
+
+# Repo stuff
+repo init -u https://github.com/Halium/android -b halium-13.0 --depth=1
+repo sync -c -j 16
