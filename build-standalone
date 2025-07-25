@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -Eeuo pipefail
+trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# Variables
+DEV_CODENAME="star2lte"
+DEV_MAN="samsung"
+
+if [ -z "${ub_dir:-}" ]; then
+  ub_dir="$HOME/ubports"
+  echo "Directory not set, defaulting to $ub_dir"
+else
+  echo "Directory is set to $ub_dir"
+fi
+
+
+mkdir -p $ub_dir/standalone
+cd $ub_dir/standalone
+
+git clone https://gitlab.com/ubports/porting/community-ports/android10/samsung-galaxy-s9/samsung-exynos9810 $ub_dir/standalone/samsung-exynos9810
+
+git clone https://github.com/arjf/android_kernel_samsung_exynos9810 $ub_dir/standalone/android_kernel_samsung_exynos9810
+

@@ -3,8 +3,11 @@
 set -Eeuo pipefail
 trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
 
+# Variables
+DEV_CODENAME="star2lte"
+DEV_MAN="samsung"
 
-if [ -z "$ub_dir" ]; then
+if [ -z "${ub_dir:-}" ]; then
   ub_dir="$HOME/ubports"
   echo "Directory not set, defaulting to $ub_dir"
 else
@@ -19,3 +22,16 @@ cd $ub_dir/build
 # Repo stuff
 repo init -u https://github.com/Halium/android -b halium-13.0 --depth=1
 repo sync -c -j 16
+
+# Copy manifest
+mkdir -p "$ub_dir/build/halium/devices/manifests/"
+cp "$ub_dir/assets/$DEV_MAN_$DEV_CODENAME.xml" "$ub_dir/build/halium/devices/manifests/"
+
+# Setup & Sync
+cd "$ub_dir/build"
+./halium/devices/setup "$DEV_CODENAME"
+hybris-patches/apply-patches.sh --mb
+
+# Building
+source build/envsetup.sh
+breakfast $DEV_CODENAME
