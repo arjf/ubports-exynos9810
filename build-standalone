@@ -22,3 +22,16 @@ git clone https://gitlab.com/ubports/porting/community-ports/android10/samsung-g
 
 git clone https://github.com/arjf/android_kernel_samsung_exynos9810 $ub_dir/standalone/android_kernel_samsung_exynos9810
 
+touch $ub_dir/standalone/android_kernel_samsung_exynos9810/arch/arm64/configs/halium.config
+
+cat << 'EOF' > $ub_dir/standalone/android_kernel_samsung_exynos9810/arch/arm64/configs/halium.config 
+CONFIG_DEVTMPFS=y
+CONFIG_FHANDLE=y
+CONFIG_SYSVIPC=y
+CONFIG_IPC_NS=y
+CONFIG_NET_NS=y
+CONFIG_PID_NS=y
+CONFIG_USER_NS=y
+CONFIG_UTS_NS=y
+CONFIG_VT=y
+EOF
