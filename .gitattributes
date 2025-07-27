@@ -1,1 +1,2 @@
+stock*.img filter=lfs diff=lfs merge=lfs -text
 assets/*.img filter=lfs diff=lfs merge=lfs -text
