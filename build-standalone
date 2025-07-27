@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 trap 'echo "✗  exited on line $LINENO: $BASH_COMMAND" >&2' ERR
 
-# Variables
+# Variables these dont change anything, just delcarative
 DEV_CODENAME="star2lte"
 DEV_MAN="samsung"
 
@@ -18,12 +18,12 @@ fi
 mkdir -p $ub_dir/standalone
 cd $ub_dir/standalone
 
-git clone https://gitlab.com/ubports/porting/community-ports/android10/samsung-galaxy-s9/samsung-exynos9810 $ub_dir/standalone/samsung-exynos9810
+# Kernel and deviceinfo
+git clone https://gitlab.com/ubports/porting/community-ports/android10/samsung-galaxy-s9/samsung-exynos9810 $ub_dir/standalone/samsung-exynos9810 # deviceinfo
+git clone https://github.com/arjf/android_kernel_samsung_exynos9810 $ub_dir/standalone/android_kernel_samsung_exynos9810 # kernel
 
-git clone https://github.com/arjf/android_kernel_samsung_exynos9810 $ub_dir/standalone/android_kernel_samsung_exynos9810
-
+# Halium config
 touch $ub_dir/standalone/android_kernel_samsung_exynos9810/arch/arm64/configs/halium.config
-
 cat << 'EOF' > $ub_dir/standalone/android_kernel_samsung_exynos9810/arch/arm64/configs/halium.config 
 CONFIG_DEVTMPFS=y
 CONFIG_FHANDLE=y
@@ -35,3 +35,26 @@ CONFIG_USER_NS=y
 CONFIG_UTS_NS=y
 CONFIG_VT=y
 EOF
+
+# Get blobs from stock images. All of this appears to be unnecessary. Since the devinceinfo repo was already filled with the blobs we needed from the stock images.
+# mkdir $ub_dir/standalone/blobs
+# cp $ub_dir/assets/star2lte-stock*.img $ub_dir/standalone/blobs/ # get stock images
+# wget https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/lineage-19.1/unpack_bootimg.py -O $ub_dir/standalone/blobs/unpack_bootimg.py # get unpack_bootimg.py
+# python3 $ub_dir/standalone/blobs/unpack_bootimg.py --boot_img $ub_dir/standalone/blobs/star2lte-stock-boot.img --out boot.out  >> $ub_dir/standalone/blobs/unpack-boot.output
+# git clone https://github.com/anestisb/android-unpackbootimg $ub_dir/standalone/blobs/android-unpackbootimg
+# cd $ub_dir/standalone/blobs/android-unpackbootimg
+# make
+# cp unpackbootimg $ub_dir/standalone/blobs/
+# cd $ub_dir/standalone/blobs
+# $ub_dir/standalone/blobs/./unpackbootimg -i $ub_dir/standalone/blobs/star2lte-stock-boot.img -o oldsrc.boot.out  >> oldsrc-boot.output
+# 
+
+# Build kernel
+cd $ub_dir/standalone/samsung-exynos9810
+./build.sh -b workdir ls build/ 
+
+# Prepare fake ota
+./build/prepare-fake-ota.sh out/device_star2lte.tar.xz ota
+
+# Create flashable images from tarballs
+./build/system-image-from-ota.sh ota/ubuntu_command images

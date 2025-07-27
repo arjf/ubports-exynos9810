@@ -2,4 +2,4 @@
 distrobox-bin/
 distrobox-setup/
 build
-standalone/
+standalone/*
